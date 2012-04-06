@@ -196,20 +196,33 @@ class InputValidater {
 			return $val;
 		} else if ( is_numeric($val) ) {
 			return intval($val) > 0;
-		} else if (empty($val) || !isset($val) || preg_match('/^(false|off)$/i', $val)) {
+		} else if (empty($val) || !isset($val) || preg_match('/^(false|off|no)$/i', $val)) {
 			return false;
 		} else {
 			return true;
 		}
 	}
 
+	private function url( $val, $field = '' ) {
+		$val = str_replace(
+			array('／','：','＃','＆', '？'),
+			array('/',':','#','&', '?'),
+			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'as') : $val
+			);
+		$regex = '/^\b(?:https?|shttp):\/\/(?:(?:[-_.!~*\'()a-zA-Z0-9;:&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*@)?(?:(?:[a-zA-Z0-9](?:[-a-zA-Z0-9]*[a-zA-Z0-9])?\.)*[a-zA-Z](?:[-a-zA-Z0-9]*[a-zA-Z0-9])?\.?|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)(?::[0-9]*)?(?:\/(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*(?:;(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)*(?:\/(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*(?:;(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)*)*)?(?:\?(?:[-_.!~*\'()a-zA-Z0-9;\/?:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)?(?:#(?:[-_.!~*\'()a-zA-Z0-9;\/?:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)?$/i';
+		if ( !preg_match($regex, $val) ) {
+			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
+		}
+		return $val;
+	}
+
 	private function email( $val, $field = '' ) {
 		$val = str_replace(
 			array('＠','。','．','＋'),
 			array('@','.','.','+'),
-			mb_convert_kana($val, 'as')
+			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'as') : $val
 			);
-		if ( !WP_Function_Wrapper::is_email($val) ) {
+		if ( !($val = WP_Function_Wrapper::is_email($val)) ) {
 			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
 		}
 		return $val;
@@ -219,7 +232,7 @@ class InputValidater {
 		$val = str_replace(
 			array('ー','－','（','）'),
 			array('-','-','(',')'),
-			mb_convert_kana($val, 'ns')
+			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val
 			);
 		if ( !preg_match('/^[0-9\-\(\)]+$/', $val) ) {
 			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
@@ -231,7 +244,7 @@ class InputValidater {
 		$val = str_replace(
 			array('ー','－'),
 			array('-','-'),
-			mb_convert_kana($val, 'ns')
+			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val
 			);
 		if ( !preg_match('/^[0-9\-]+$/', $val) ) {
 			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
@@ -239,8 +252,16 @@ class InputValidater {
 		return $val;
 	}
 
+	private function numeric( $val, $field = '' ) {
+		$val = function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val;
+		if ( !is_numeric($val) ) {
+			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
+		}
+		return $val;
+	}
+
 	private function kana( $val ) {
-		$val = mb_convert_kana($val, 'ASKVC');
+		$val = function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ASKVC') : $val;
 		return $val;
 	}
 }
