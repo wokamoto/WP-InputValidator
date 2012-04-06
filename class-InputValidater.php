@@ -10,7 +10,8 @@ $iv->set_rules('telephone', array('trim','esc_html','required','tel'));
 $iv->set_rules('password',  array('trim','esc_html','required'));
 $iv->set_rules('password',  'password_min_length', 8);
 
-$input  = $iv->input(array('email', 'telephone', 'password'), true);
+$email  = $iv->input('email', true);
+$inputs = $iv->input(array('email', 'telephone', 'password'), true);
 $errors = $iv->get_errors();
 
  ***/
@@ -64,8 +65,9 @@ class InputValidater {
 				$args = array_merge( array($val), $args );
 
 				if ( $func !== false ) {
-					if ( false === ($val = call_user_func_array($func, $args) ) ) {
-						return false;
+					$val = call_user_func_array($func, $args);
+					if ( WP_Function_Wrapper::is_wp_error($val) ) {
+						return $val;
 					}
 				} else {
 					return $val;
@@ -115,7 +117,7 @@ class InputValidater {
 		$arg_list = func_get_args();
 		unset($arg_list[1]);
 
-		if ( is_string($func) && $this->rc->hasMethod($func) && is_callable(array($this, $func)) ) {
+		if ( is_string($func) && $this->rc->hasMethod($func) ) {
 			$this->rules[$field][] = array( 'func' => array(&$this, $func), 'args' => $arg_list );
 		} else if ( is_callable($func) ) {
 			$this->rules[$field][] = array( 'func' => $func, 'args' => $arg_list );
@@ -137,13 +139,14 @@ class InputValidater {
 		$this->errors = array();
 	}
 
-	public function set_errors( $field, $message = '' ) {
+	public function set_error( $field, $message = '' ) {
 		if ( empty($message) )
 			$message = sprintf('The "%s" field is invalid.', $field);
-		$this->errors[] = array(
-			'field' => $field ,
-			'message' => $message ,
-			);
+		if ( !isset($this->errors[$field]) )
+			$this->errors[$field] = array();
+		if ( !in_array($message, $this->errors[$field]) )
+			$this->errors[$field] = $message;
+		return WP_Function_Wrapper::wp_error($field, $message);
 	}
 
 	/*
@@ -154,19 +157,12 @@ class InputValidater {
 	}
 
 	private function esc_html( $val ) {
-		if ( function_exists('esc_html') ) {
-			return esc_html( $val );
-		} else {
-			$safe_text = $this->wp_check_invalid_utf8( $val );
-			$safe_text = $this->_wp_specialchars( $safe_text, ENT_QUOTES );
-			return esc_html($safe_text);
-		}
+		return WP_Function_Wrapper::esc_html( $val );
 	}
 
 	private function required( $val, $field = '' ) {
 		if ( empty($val) ) {
-			$this->set_errors( $field , sprintf('The "%s" field is required.', $field) );
-			return false;
+			return $this->set_error( $field , sprintf('The "%s" field is required.', $field) );
 		}
 		return $val;
 	}
@@ -175,8 +171,7 @@ class InputValidater {
 		if ( !is_numeric($min_length) )
 			return $val;
 		if ( strlen($val) < $min_length ) {
-			$this->set_errors( $field , sprintf('The "%s" field must be at least %s characters in length.', $field, $min_length) );
-			return false;
+			return $this->set_error( $field , sprintf('The "%s" field must be at least %s characters in length.', $field, $min_length) );
 		}
 		return $val;
 	}
@@ -185,8 +180,7 @@ class InputValidater {
 		if ( !is_numeric($max_length) )
 			return $val;
 		if ( strlen($val) > $min_length ) {
-			$this->set_errors( $field , sprintf('The "%s" field must be at most %s characters in length.', $field, $max_length) );
-			return false;
+			return $this->set_error( $field , sprintf('The "%s" field must be at most %s characters in length.', $field, $max_length) );
 		}
 		return $val;
 	}
@@ -215,9 +209,8 @@ class InputValidater {
 			array('@','.','.','+'),
 			mb_convert_kana($val, 'as')
 			);
-		if ( !$this->is_email($val) ) {
-			$this->set_errors( $field , sprintf('The "%s" field is invalid.', $field) );
-			return false;
+		if ( !WP_Function_Wrapper::is_email($val) ) {
+			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
 		}
 		return $val;
 	}
@@ -229,8 +222,7 @@ class InputValidater {
 			mb_convert_kana($val, 'ns')
 			);
 		if ( !preg_match('/^[0-9\-\(\)]+$/', $val) ) {
-			$this->set_errors( $field , sprintf('The "%s" field is invalid.', $field) );
-			return false;
+			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
 		}
 		return $val;
 	}
@@ -242,8 +234,7 @@ class InputValidater {
 			mb_convert_kana($val, 'ns')
 			);
 		if ( !preg_match('/^[0-9\-]+$/', $val) ) {
-			$this->set_errors( $field , sprintf('The "%s" field is invalid.', $field) );
-			return false;
+			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
 		}
 		return $val;
 	}
@@ -252,11 +243,27 @@ class InputValidater {
 		$val = mb_convert_kana($val, 'ASKVC');
 		return $val;
 	}
+}
 
-	/*
-	 * utility
-	 */
-	private function is_email( $email, $deprecated = false ) {
+
+class WP_Function_Wrapper {
+	static public function wp_error($field, $message) {
+		if ( class_exists('WP_Error') ) {
+			return WP_Error($field, $message);
+		} else {
+			return false;
+		}
+	}
+
+	static public function is_wp_error($thing) {
+		if ( function_exists('is_wp_error') ) {
+			return is_wp_error( $thing );
+		} else {
+			return ($thing === false);
+		}
+	}
+
+	static public function is_email( $email, $deprecated = false ) {
 		if ( function_exists('is_email') ) {
 			return is_email( $email, $deprecated );
 		} else {
@@ -308,7 +315,17 @@ class InputValidater {
 		}
 	}
 
-	private function wp_check_invalid_utf8( $string, $strip = false ) {
+	static public function esc_html( $text ) {
+		if ( function_exists('esc_html') ) {
+			return esc_html($text);
+		} else {
+			$safe_text = self::wp_check_invalid_utf8( $text );
+			$safe_text = self::wp_specialchars( $safe_text, ENT_QUOTES );
+			return $safe_text;
+		}
+	}
+
+	static public function wp_check_invalid_utf8( $string, $strip = false ) {
 		if ( function_exists('wp_check_invalid_utf8') ) {
 			return wp_check_invalid_utf8( $string, $strip );
 		} else {
@@ -341,7 +358,7 @@ class InputValidater {
 		}
 	}
 
-	private function _wp_specialchars( $string, $quote_style = ENT_NOQUOTES, $charset = false, $double_encode = false ) {
+	static public function wp_specialchars( $string, $quote_style = ENT_NOQUOTES, $charset = false, $double_encode = false ) {
 		if ( function_exists('_wp_specialchars') ) {
 			return _wp_specialchars( $string, $quote_style, $charset, $double_encode );
 		} else {

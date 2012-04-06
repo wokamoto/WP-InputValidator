@@ -1,0 +1,11 @@
+example:
+
+$iv = new InputValidater('POST');
+
+$iv->set_rules('email',     array('trim','esc_html','required','email'));
+$iv->set_rules('telephone', array('trim','esc_html','required','tel'));
+$iv->set_rules('password',  array('trim','esc_html','required'));
+$iv->set_rules('password',  'password_min_length', 8);
+
+$input  = $iv->input(array('email', 'telephone', 'password'), true);
+$errors = $iv->get_errors();
