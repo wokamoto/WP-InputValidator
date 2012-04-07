@@ -126,10 +126,11 @@ class InputValidator {
 	}
 
 	private function set_error( $field, $message = '' ) {
-        if ( WP_Function_Wrapper::is_wp_error($message) )
-            $message = WP_Function_Wrapper::get_error_message($field, $message);
-        else
-            return;
+		if ( WP_Function_Wrapper::is_wp_error($message) )
+			$message = WP_Function_Wrapper::get_error_message($field, $message);
+		else
+			return;
+
 		if ( !isset($this->errors[$field]) )
 			$this->errors[$field] = array();
 		if ( !in_array($message, $this->errors[$field]) )
