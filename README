@@ -1,6 +1,6 @@
 example:
 
-$iv = new InputValidater('POST');
+$iv = new InputValidator('POST');
 
 $iv->set_rules('email',     array('trim','esc_html','required','email'));
 $iv->set_rules('telephone', array('trim','esc_html','required','tel'));
