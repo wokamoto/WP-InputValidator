@@ -7,6 +7,7 @@ class InputValidator {
 	private $input  = array();
 	private $rules  = array();
 	private $errors = array();
+
 	private $rc;
 
 	function __construct( $method = 'POST' ) {
@@ -51,7 +52,7 @@ class InputValidator {
 				if ( $func !== false ) {
 					$val = call_user_func_array($func, $args);
 					if ( WP_Function_Wrapper::is_wp_error($val) ) {
-                        $this->set_error( $field, $val );
+						$this->set_error( $field, $val );
 						return $val;
 					}
 				} else {
@@ -267,21 +268,21 @@ class WP_Function_Wrapper {
 		}
 	}
 
-    static public function get_error_message($field, $thing) {
-        if ( self::is_wp_error($thing) ) {
-            return class_exists('WP_Error')
-                ? $thing->get_error_message()
-                : (isset($thing->message) ? $thing->message : sprintf('The "%s" field is invalid.', $field));
-        } else {
-            return null;
-        }
-    }
-
 	static public function is_wp_error($thing) {
 		if ( function_exists('is_wp_error') ) {
 			return is_wp_error( $thing );
 		} else {
             return ( is_object($thing) && isset($thing->validate) && $thing->validate === false);
+		}
+	}
+
+	static public function get_error_message($field, $thing) {
+		if ( self::is_wp_error($thing) ) {
+			return class_exists('WP_Error')
+				? $thing->get_error_message()
+				: (isset($thing->message) ? $thing->message : sprintf('The "%s" field is invalid.', $field));
+		} else {
+			return null;
 		}
 	}
 
