@@ -260,11 +260,11 @@ class WP_Function_Wrapper {
 		if ( class_exists('WP_Error') ) {
 			return new WP_Error($field, $message, $data);
 		} else {
-            $error = new stdClass();
-            $error->validate = false;
-            $error->field = $field;
-            $error->message = $message;
-            $error->data = $data;
+			$error = new stdClass();
+			$error->validate = false;
+			$error->field = $field;
+			$error->message = $message;
+			$error->data = $data;
 			return $error;
 		}
 	}
@@ -273,7 +273,7 @@ class WP_Function_Wrapper {
 		if ( function_exists('is_wp_error') ) {
 			return is_wp_error( $thing );
 		} else {
-            return ( is_object($thing) && isset($thing->validate) && $thing->validate === false);
+			return ( is_object($thing) && isset($thing->validate) && $thing->validate === false);
 		}
 	}
 
