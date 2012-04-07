@@ -52,6 +52,7 @@ class InputValidator {
 				if ( $func !== false ) {
 					$val = call_user_func_array($func, $args);
 					if ( WP_Function_Wrapper::is_wp_error($val) ) {
+                        $this->set_error( $field, $val );
 						return $val;
 					}
 				} else {
@@ -124,14 +125,15 @@ class InputValidator {
 		$this->errors = array();
 	}
 
-	public function set_error( $field, $message = '' ) {
-		if ( empty($message) )
-			$message = sprintf('The "%s" field is invalid.', $field);
+	private function set_error( $field, $message = '' ) {
+        if ( WP_Function_Wrapper::is_wp_error($message) )
+            $message = WP_Function_Wrapper::get_error_message($field, $message);
+        else
+            return;
 		if ( !isset($this->errors[$field]) )
 			$this->errors[$field] = array();
 		if ( !in_array($message, $this->errors[$field]) )
 			$this->errors[$field] = $message;
-		return WP_Function_Wrapper::wp_error($field, $message);
 	}
 
 	/*
@@ -147,7 +149,7 @@ class InputValidator {
 
 	private function required( $val, $field = '' ) {
 		if ( empty($val) ) {
-			return $this->set_error( $field , sprintf('The "%s" field is required.', $field) );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is required.', $field), $val );
 		}
 		return $val;
 	}
@@ -156,7 +158,7 @@ class InputValidator {
 		if ( !is_numeric($min_length) )
 			return $val;
 		if ( strlen($val) < $min_length ) {
-			return $this->set_error( $field , sprintf('The "%s" field must be at least %s characters in length.', $field, $min_length) );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field must be at least %s characters in length.', $field, $min_length), $val );
 		}
 		return $val;
 	}
@@ -165,7 +167,7 @@ class InputValidator {
 		if ( !is_numeric($max_length) )
 			return $val;
 		if ( strlen($val) > $min_length ) {
-			return $this->set_error( $field , sprintf('The "%s" field must be at most %s characters in length.', $field, $max_length) );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field must be at most %s characters in length.', $field, $max_length), $val );
 		}
 		return $val;
 	}
@@ -196,7 +198,7 @@ class InputValidator {
 			);
 		$regex = '/^\b(?:https?|shttp):\/\/(?:(?:[-_.!~*\'()a-zA-Z0-9;:&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*@)?(?:(?:[a-zA-Z0-9](?:[-a-zA-Z0-9]*[a-zA-Z0-9])?\.)*[a-zA-Z](?:[-a-zA-Z0-9]*[a-zA-Z0-9])?\.?|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)(?::[0-9]*)?(?:\/(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*(?:;(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)*(?:\/(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*(?:;(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)*)*)?(?:\?(?:[-_.!~*\'()a-zA-Z0-9;\/?:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)?(?:#(?:[-_.!~*\'()a-zA-Z0-9;\/?:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)?$/i';
 		if ( !preg_match($regex, $val) ) {
-			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
 		}
 		return $val;
 	}
@@ -208,7 +210,7 @@ class InputValidator {
 			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'as') : $val
 			);
 		if ( !($val = WP_Function_Wrapper::is_email($val)) ) {
-			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
 		}
 		return $val;
 	}
@@ -220,7 +222,7 @@ class InputValidator {
 			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val
 			);
 		if ( !preg_match('/^[0-9\-\(\)]+$/', $val) ) {
-			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
 		}
 		return $val;
 	}
@@ -232,7 +234,7 @@ class InputValidator {
 			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val
 			);
 		if ( !preg_match('/^[0-9\-]+$/', $val) ) {
-			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
 		}
 		return $val;
 	}
@@ -240,7 +242,7 @@ class InputValidator {
 	private function numeric( $val, $field = '' ) {
 		$val = function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val;
 		if ( !is_numeric($val) ) {
-			return $this->set_error( $field , sprintf('The "%s" field is invalid.', $field) );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
 		}
 		return $val;
 	}
@@ -253,19 +255,34 @@ class InputValidator {
 
 
 class WP_Function_Wrapper {
-	static public function wp_error($field, $message) {
+	static public function wp_error($field, $message, $data = '') {
 		if ( class_exists('WP_Error') ) {
-			return new WP_Error($field, $message);
+			return new WP_Error($field, $message, $data);
 		} else {
-			return false;
+            $error = new stdClass();
+            $error->validate = false;
+            $error->field = $field;
+            $error->message = $message;
+            $error->data = $data;
+			return $error;
 		}
 	}
+
+    static public function get_error_message($field, $thing) {
+        if ( self::is_wp_error($thing) ) {
+            return class_exists('WP_Error')
+                ? $thing->get_error_message()
+                : (isset($thing->message) ? $thing->message : sprintf('The "%s" field is invalid.', $field));
+        } else {
+            return null;
+        }
+    }
 
 	static public function is_wp_error($thing) {
 		if ( function_exists('is_wp_error') ) {
 			return is_wp_error( $thing );
 		} else {
-			return ($thing === false);
+            return ( is_object($thing) && isset($thing->validate) && $thing->validate === false);
 		}
 	}
 
