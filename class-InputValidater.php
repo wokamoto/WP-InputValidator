@@ -270,7 +270,7 @@ class InputValidater {
 class WP_Function_Wrapper {
 	static public function wp_error($field, $message) {
 		if ( class_exists('WP_Error') ) {
-			return WP_Error($field, $message);
+			return new WP_Error($field, $message);
 		} else {
 			return false;
 		}
