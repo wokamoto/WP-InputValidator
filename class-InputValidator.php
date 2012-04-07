@@ -7,7 +7,6 @@ class InputValidator {
 	private $input  = array();
 	private $rules  = array();
 	private $errors = array();
-
 	private $rc;
 
 	function __construct( $method = 'POST' ) {
