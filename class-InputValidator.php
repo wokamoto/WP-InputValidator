@@ -36,10 +36,10 @@ class InputValidator {
 	/*
 	 * validate
 	 */
-	public function validate( $field, $val ) {
+	private function validate( $field, $val, &$err ) {
+		$err = '';
 		if ( isset($this->rules[$field]) ) {
 			$rules = (array)$this->rules[$field];
-
 			if ( !is_array($val) ) {
 				foreach ( $rules as $rule ) {
 					if ( isset($rule['func']) && is_callable($rule['func']) ) {
@@ -47,41 +47,35 @@ class InputValidator {
 						$args = array_merge( array($val), $args );
 						$val  = call_user_func_array( $rule['func'], $args );
 						if ( WP_Function_Wrapper::is_wp_error($val) ) {
-							$this->set_error( $field, $val );
+							$err = $val;
 							return $val;
 						}
 					}
 				}
 			} else {
-				$err = array();
+				$errors = array();
 				foreach ( $val as $key => &$v ) {
-					foreach ( $rules as $rule ) {
-						if ( isset($rule['func']) && is_callable($rule['func']) ) {
-							$args = (array)( isset($rule['args']) ? $rule['args'] : array($field) );
-							$args = array_merge( array($v), $args );
-							$v    = call_user_func_array( $rule['func'], $args );
-							if ( WP_Function_Wrapper::is_wp_error($v) ) {
-								$err[$key] = $v;
-								break;
-							}
-						}
-					}
+					$e = '';
+					$v = $this->validate( $field, $v, $e );
+					if ( !empty($e) )
+						$errors[$key] = $e;
 				}
-				if ( count($err) > 0 ) {
-					$this->set_error( $field, $err );
-					return $val;
-				}
+				if ( count($errors) > 0 )
+					$err = $errors;
 			}
 		}
 		return $val;
 	}
 
-	private function array_fetch( $array, $index = '', $validate = true ) {
-		$val = isset($array[$index]) ? $array[$index] : null;
-		return
-			$validate
-			? $this->validate( $index, $val )
-			: $val;
+	private function array_fetch( $array, $field = '', $validate = true ) {
+		$val = isset($array[$field]) ? $array[$field] : null;
+		if ( $validate ) {
+			$err = '';
+			$val = $this->validate( $field, $val, $err );
+			if ( !empty($err) )
+				$this->set_error( $field, $err );
+		}
+		return $val;
 	}
 
 	/*
