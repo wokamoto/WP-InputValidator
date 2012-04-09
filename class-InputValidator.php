@@ -4,7 +4,7 @@ if ( !class_exists('InputValidator') ) :
 class InputValidator {
 	const PASSWORD_MIN_LENGTH = 6;
 
-	private $input  = array();
+	private $inputs = array();
 	private $rules  = array();
 	private $errors = array();
 
@@ -14,22 +14,22 @@ class InputValidator {
 		$method = is_string($method) ? strtoupper($method) : $method;
 		switch ($method) {
 		case 'POST':
-			$this->input = $_POST;
+			$this->inputs = $_POST;
 			break;
 		case 'GET':
-			$this->input = $_GET;
+			$this->inputs = $_GET;
 			break;
 		case 'COOKIE':
-			$this->input = $_COOKIE;
+			$this->inputs = $_COOKIE;
 			break;
 		default:
 			if ( is_array($method) ) {
-				$this->input = $method;
+				$this->inputs = $method;
 			} else {
-				$this->input = $_POST;
+				$this->inputs = $_POST;
 			}
 		}
-
+		$this->errors_init();
 		$this->rc = new ReflectionClass("InputValidator");
 	}
 
@@ -38,24 +38,37 @@ class InputValidator {
 	 */
 	public function validate( $field, $val ) {
 		if ( isset($this->rules[$field]) ) {
-			foreach ( $this->rules[$field] as $rule ) {
-				$func =
-					isset($rule['func']) && is_callable($rule['func'])
-					? $rule['func']
-					: false;
-				$args =
-					isset($rule['args']) && is_array($rule['args'])
-					? $rule['args']
-					: array($field);
-				$args = array_merge( array($val), $args );
+			$rules = (array)$this->rules[$field];
 
-				if ( $func !== false ) {
-					$val = call_user_func_array($func, $args);
-					if ( WP_Function_Wrapper::is_wp_error($val) ) {
-						$this->set_error( $field, $val );
-						return $val;
+			if ( !is_array($val) ) {
+				foreach ( $rules as $rule ) {
+					if ( isset($rule['func']) && is_callable($rule['func']) ) {
+						$args = (array)( isset($rule['args']) ? $rule['args'] : array($field) );
+						$args = array_merge( array($val), $args );
+						$val  = call_user_func_array( $rule['func'], $args );
+						if ( WP_Function_Wrapper::is_wp_error($val) ) {
+							$this->set_error( $field, $val );
+							return $val;
+						}
 					}
-				} else {
+				}
+			} else {
+				$err = array();
+				foreach ( $val as $key => &$v ) {
+					foreach ( $rules as $rule ) {
+						if ( isset($rule['func']) && is_callable($rule['func']) ) {
+							$args = (array)( isset($rule['args']) ? $rule['args'] : array($field) );
+							$args = array_merge( array($v), $args );
+							$v    = call_user_func_array( $rule['func'], $args );
+							if ( WP_Function_Wrapper::is_wp_error($v) ) {
+								$err[$key] = $v;
+								break;
+							}
+						}
+					}
+				}
+				if ( count($err) > 0 ) {
+					$this->set_error( $field, $err );
 					return $val;
 				}
 			}
@@ -74,21 +87,21 @@ class InputValidator {
 	/*
 	 * get input data
 	 */
-	public function input( $index = false, $validate = false ) {
+	public function input( $index = false, $validate = true ) {
 		if ( !$index ) {
 			$post = array();
-			foreach (array_keys($this->input) as $key) {
-				$post[$key] = $this->array_fetch($this->input, $key, $validate);
+			foreach (array_keys($this->inputs) as $key) {
+				$post[$key] = $this->array_fetch($this->inputs, $key, $validate);
 			}
 			return $post;
 		} else if ( is_array($index) ) {
 			$post = array();
 			foreach ($index as $key) {
-				$post[$key] = $this->array_fetch($this->input, $key, $validate);
+				$post[$key] = $this->array_fetch($this->inputs, $key, $validate);
 			}
 			return $post;
 		} else {
-			return $this->array_fetch($this->input, $index, $validate);
+			return $this->array_fetch($this->inputs, $index, $validate);
 		}
 	}
 
@@ -126,15 +139,27 @@ class InputValidator {
 	}
 
 	private function set_error( $field, $message = '' ) {
-		if ( WP_Function_Wrapper::is_wp_error($message) )
-			$message = WP_Function_Wrapper::get_error_message($field, $message);
-		else
-			return;
+		if ( !is_array($message) ) {
+			$message = 
+				WP_Function_Wrapper::is_wp_error($message)
+				? WP_Function_Wrapper::get_error_message($field, $message)
+				: '';
+		} else {
+			$err = array();
+			foreach ( $message as $key => $val ) {
+				if ( WP_Function_Wrapper::is_wp_error($val) ) {
+					$err[$key] = WP_Function_Wrapper::get_error_message($field, $val);
+				}
+			}
+			$message = count($err) > 0 ? $err : '';
+		}
 
-		if ( !isset($this->errors[$field]) )
-			$this->errors[$field] = array();
-		if ( !in_array($message, $this->errors[$field]) )
-			$this->errors[$field] = $message;
+		if ( !empty($message) ) {
+			if ( !isset($this->errors[$field]) )
+				$this->errors[$field] = array();
+			if ( !in_array($message, $this->errors[$field]) )
+				$this->errors[$field] = $message;
+		}
 	}
 
 	/*
@@ -192,6 +217,7 @@ class InputValidator {
 	}
 
 	private function url( $val, $field = '' ) {
+		$val_org = $val;
 		$val = str_replace(
 			array('／','：','＃','＆', '？'),
 			array('/',':','#','&', '?'),
@@ -199,51 +225,55 @@ class InputValidator {
 			);
 		$regex = '/^\b(?:https?|shttp):\/\/(?:(?:[-_.!~*\'()a-zA-Z0-9;:&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*@)?(?:(?:[a-zA-Z0-9](?:[-a-zA-Z0-9]*[a-zA-Z0-9])?\.)*[a-zA-Z](?:[-a-zA-Z0-9]*[a-zA-Z0-9])?\.?|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)(?::[0-9]*)?(?:\/(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*(?:;(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)*(?:\/(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*(?:;(?:[-_.!~*\'()a-zA-Z0-9:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)*)*)?(?:\?(?:[-_.!~*\'()a-zA-Z0-9;\/?:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)?(?:#(?:[-_.!~*\'()a-zA-Z0-9;\/?:@&=+$,]|%[0-9A-Fa-f][0-9A-Fa-f])*)?$/i';
 		if ( !preg_match($regex, $val) ) {
-			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val_org );
 		}
 		return $val;
 	}
 
 	private function email( $val, $field = '' ) {
+		$val_org = $val;
 		$val = str_replace(
 			array('＠','。','．','＋'),
 			array('@','.','.','+'),
 			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'as') : $val
 			);
 		if ( !($val = WP_Function_Wrapper::is_email($val)) ) {
-			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val_org );
 		}
 		return $val;
 	}
 
 	private function tel( $val, $field = '' ) {
+		$val_org = $val;
 		$val = str_replace(
 			array('ー','－','（','）'),
 			array('-','-','(',')'),
 			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val
 			);
 		if ( !preg_match('/^[0-9\-\(\)]+$/', $val) ) {
-			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val_org );
 		}
 		return $val;
 	}
 
 	private function postcode( $val, $field = '' ) {
+		$val_org = $val;
 		$val = str_replace(
 			array('ー','－'),
 			array('-','-'),
 			function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val
 			);
 		if ( !preg_match('/^[0-9\-]+$/', $val) ) {
-			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val_org );
 		}
 		return $val;
 	}
 
 	private function numeric( $val, $field = '' ) {
+		$val_org = $val;
 		$val = function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ns') : $val;
 		if ( !is_numeric($val) ) {
-			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val_org );
 		}
 		return $val;
 	}
