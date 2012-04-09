@@ -272,6 +272,13 @@ class InputValidator {
 		return $val;
 	}
 
+	private function match( $val, $field, $regex ) {
+		if ( !preg_match($regex, $val) ) {
+			return WP_Function_Wrapper::wp_error( $field, sprintf('The "%s" field is invalid.', $field), $val );
+		}
+		return $val;
+	}
+
 	private function kana( $val ) {
 		$val = function_exists('mb_convert_kana') ? mb_convert_kana($val, 'ASKVC') : $val;
 		return $val;
